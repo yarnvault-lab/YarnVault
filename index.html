@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>YarnVault Online 3.0.1.1</title>
+<title>YarnVault Online 3.0.2.1</title>
 <style>
 :root{--g:#176b57;--g2:#eaf4f1;--line:#e4e7ec;--bg:#f7f8fa;--text:#1f2937;--muted:#667085;--red:#b42318;--amber:#b54708;--blue:#175cd3}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
@@ -35,7 +35,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 </div>
 
 <div id="app" class="hidden">
-<div class="top"><div class="brand">YarnVault Lab <span class="tag">Online 3.0.1</span></div><div><span id="who">Xinru</span> <span id="role" class="tag"></span> <button id="logoutBtn" class="btn">退出</button></div></div>
+<div class="top"><div class="brand">YarnVault Lab <span class="tag">Online 3.0.2</span></div><div><span id="who">Xinru</span> <span id="role" class="tag"></span> <button id="logoutBtn" class="btn">退出</button></div></div>
 <div class="layout">
 <aside>
 <button class="nav active" data-view="dashboard">仪表盘</button>
@@ -80,7 +80,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 <select id="fSupplier"><option value="">全部供应商代码</option></select>
 <select id="fSpin"><option value="">全部纺纱方式</option></select>
 <input id="fCount" placeholder="纱支">
-<input id="fComp" placeholder="成分">
+<input id="fComp" list="compOptions" placeholder="成分（可输入 / 下拉选择）"><datalist id="compOptions"></datalist>
 <select id="sort"><option value="yarn_code:asc">编号 升序</option><option value="yarn_code:desc">编号 降序</option><option value="yarn_count:fine">纱支 细→粗</option><option value="yarn_count:coarse">纱支 粗→细</option><option value="weight_kg:asc">重量 升序</option><option value="weight_kg:desc">重量 降序</option><option value="unit_price:asc">价格 升序</option><option value="unit_price:desc">价格 降序</option></select>
 <button id="clearFilterBtn" class="btn">清除</button>
 </div>
@@ -178,7 +178,28 @@ async function loadAll(){
 }
 function renderAll(){fillFilters();renderDashboard();renderInventory();renderTests();renderSwatches();renderAnalysisSelectors();renderHistory()}
 function renderDashboard(){dYarns.textContent=yarns.length;dComp.textContent=yarns.filter(y=>y.reference_composition&&y.reference_composition!=='未知').length;dTests.textContent=tests.length;dSwatches.textContent=swatches.length;dSwatchTests.textContent=swatchTests.length;dSuppliers.textContent=new Set(yarns.map(y=>y.supplier_code).filter(Boolean)).size;const missing=yarns.filter(y=>!y.reference_composition||!y.yarn_count||!y.product_name).length;qualityText.innerHTML=`<p><b>${yarns.length-missing}</b> 条基础资料较完整，<b>${missing}</b> 条仍有待补字段。</p><p class="muted">明确“未知”的成分不会被当作漏录；后续实验结果独立进入实测字段。</p>`}
-function fillFilters(){const s=fSupplier.value,p=fSpin.value;fSupplier.innerHTML='<option value="">全部供应商代码</option>'+[...new Set(yarns.map(y=>y.supplier_code).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('');fSpin.innerHTML='<option value="">全部纺纱方式</option>'+[...new Set(yarns.map(y=>y.spinning_method).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('');fSupplier.value=s;fSpin.value=p}
+function componentOptions(){
+  const set=new Set();
+  const aliases=['羊毛','美丽诺羊毛','棉','精梳棉','粘胶','粘胶纤维','莫代尔','锦纶','尼龙','聚酯纤维','涤纶','腈纶','PBT','PTT','莱赛尔','天丝','亚麻','桑蚕丝','山羊绒','再生聚酯纤维','再生纤维素纤维','醋酸纤维','氨纶','ECDP'];
+  for(const a of aliases){
+    if(yarns.some(y=>`${y.reference_composition||''} ${y.test_composition||''}`.toLowerCase().includes(a.toLowerCase()))) set.add(a);
+  }
+  for(const y of yarns){
+    const txt=`${y.reference_composition||''}、${y.test_composition||''}`;
+    for(let part of txt.split(/[、,，;/；+]/)){
+      part=part.replace(/\d+(?:\.\d+)?\s*%/g,'').trim();
+      if(part && part!=='未知' && part.length<=16) set.add(part);
+    }
+  }
+  return [...set].sort((a,b)=>a.localeCompare(b,'zh-CN'));
+}
+function fillFilters(){
+  const s=fSupplier.value,p=fSpin.value;
+  fSupplier.innerHTML='<option value="">全部供应商代码</option>'+[...new Set(yarns.map(y=>y.supplier_code).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('');
+  fSpin.innerHTML='<option value="">全部纺纱方式</option>'+[...new Set(yarns.map(y=>y.spinning_method).filter(Boolean))].sort().map(v=>`<option>${esc(v)}</option>`).join('');
+  document.getElementById('compOptions').innerHTML=componentOptions().map(v=>`<option value="${esc(v)}"></option>`).join('');
+  fSupplier.value=s;fSpin.value=p;
+}
 function tex(s){if(!s)return Infinity;let x=String(s).toUpperCase().replace(/\s/g,''),m;if(m=x.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)NM$/))return 1000/(+m[2]/+m[1]);if(m=x.match(/^(\d+(?:\.\d+)?)NM\/(\d+(?:\.\d+)?)$/))return 1000/(+m[1]/+m[2]);if(m=x.match(/^(\d+(?:\.\d+)?)S\/(\d+(?:\.\d+)?)$/))return 590.5/(+m[1]/+m[2]);if(m=x.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)S$/))return 590.5/(+m[2]/+m[1]);return Infinity}
 function cmp(a,b){return String(a??'').localeCompare(String(b??''),'zh-CN',{numeric:true,sensitivity:'base'})}
 function invRows(){let rs=yarns.filter(y=>{const h=[y.yarn_code,y.mill_sample_code,y.product_name,y.reference_composition,y.test_composition,y.yarn_count,y.spinning_method,y.color,y.color_code,y.lot_no,y.purpose,admin()?y.supplier_name:''].filter(Boolean).join(' ').toLowerCase();return q.value.toLowerCase().trim().split(/\s+/).filter(Boolean).every(t=>h.includes(t))&&(!fSupplier.value||y.supplier_code===fSupplier.value)&&(!fSpin.value||y.spinning_method===fSpin.value)&&(!fCount.value||String(y.yarn_count||'').toLowerCase().includes(fCount.value.toLowerCase()))&&(!fComp.value||`${y.reference_composition||''} ${y.test_composition||''}`.toLowerCase().includes(fComp.value.toLowerCase()))});const [k,d]=sort.value.split(':');rs.sort((a,b)=>{let c=0;if(k==='yarn_count')c=tex(a[k])-tex(b[k]);else if(['weight_kg','unit_price'].includes(k))c=(a[k]==null?Infinity:Number(a[k]))-(b[k]==null?Infinity:Number(b[k]));else c=cmp(a[k],b[k]);return ['desc','coarse'].includes(d)?-c:c});return rs}
