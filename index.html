@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>YarnVault Online 3.0.2.1</title>
+<title>YarnVault Online 3.0.3.1</title>
 <style>
 :root{--g:#176b57;--g2:#eaf4f1;--line:#e4e7ec;--bg:#f7f8fa;--text:#1f2937;--muted:#667085;--red:#b42318;--amber:#b54708;--blue:#175cd3}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
@@ -35,7 +35,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 </div>
 
 <div id="app" class="hidden">
-<div class="top"><div class="brand">YarnVault Lab <span class="tag">Online 3.0.2</span></div><div><span id="who">Xinru</span> <span id="role" class="tag"></span> <button id="logoutBtn" class="btn">退出</button></div></div>
+<div class="top"><div class="brand">YarnVault Lab <span class="tag">Online 3.0.3</span></div><div><span id="who">Xinru</span> <span id="role" class="tag"></span> <button id="logoutBtn" class="btn">退出</button></div></div>
 <div class="layout">
 <aside>
 <button class="nav active" data-view="dashboard">仪表盘</button>
@@ -200,7 +200,30 @@ function fillFilters(){
   document.getElementById('compOptions').innerHTML=componentOptions().map(v=>`<option value="${esc(v)}"></option>`).join('');
   fSupplier.value=s;fSpin.value=p;
 }
-function tex(s){if(!s)return Infinity;let x=String(s).toUpperCase().replace(/\s/g,''),m;if(m=x.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)NM$/))return 1000/(+m[2]/+m[1]);if(m=x.match(/^(\d+(?:\.\d+)?)NM\/(\d+(?:\.\d+)?)$/))return 1000/(+m[1]/+m[2]);if(m=x.match(/^(\d+(?:\.\d+)?)S\/(\d+(?:\.\d+)?)$/))return 590.5/(+m[1]/+m[2]);if(m=x.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)S$/))return 590.5/(+m[2]/+m[1]);return Infinity}
+function normalizeCount(s){
+  if(!s)return s;
+  let raw=String(s).trim();
+  if(raw.includes('公分'))return raw;
+  let x=raw.replace(/\s/g,'').replace(/nm/ig,'Nm').replace(/s/ig,'S').replace(/N$/i,'Nm');
+  let m=x.match(/^(\d+(?:\.\d+)?)(S|Nm)\/(\d+)$/);
+  if(m)return `${m[3]}/${m[1]}${m[2]}`;
+  m=x.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(S|Nm)$/);
+  if(m){
+    const a=Number(m[1]),b=Number(m[2]);
+    if(a<=4)return `${Number.isInteger(a)?a:m[1]}/${m[2]}${m[3]}`;
+    if(b<=4)return `${Number.isInteger(b)?b:m[2]}/${m[1]}${m[3]}`;
+  }
+  return raw;
+}
+function tex(s){
+  const x=normalizeCount(s);
+  if(!x||String(x).includes('公分'))return Infinity;
+  let m=String(x).match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(Nm|S)$/);
+  if(!m)return Infinity;
+  const plies=Number(m[1]),count=Number(m[2]),unit=m[3];
+  if(!plies||!count)return Infinity;
+  return unit==='Nm' ? 1000*plies/count : 590.5*plies/count;
+}
 function cmp(a,b){return String(a??'').localeCompare(String(b??''),'zh-CN',{numeric:true,sensitivity:'base'})}
 function invRows(){let rs=yarns.filter(y=>{const h=[y.yarn_code,y.mill_sample_code,y.product_name,y.reference_composition,y.test_composition,y.yarn_count,y.spinning_method,y.color,y.color_code,y.lot_no,y.purpose,admin()?y.supplier_name:''].filter(Boolean).join(' ').toLowerCase();return q.value.toLowerCase().trim().split(/\s+/).filter(Boolean).every(t=>h.includes(t))&&(!fSupplier.value||y.supplier_code===fSupplier.value)&&(!fSpin.value||y.spinning_method===fSpin.value)&&(!fCount.value||String(y.yarn_count||'').toLowerCase().includes(fCount.value.toLowerCase()))&&(!fComp.value||`${y.reference_composition||''} ${y.test_composition||''}`.toLowerCase().includes(fComp.value.toLowerCase()))});const [k,d]=sort.value.split(':');rs.sort((a,b)=>{let c=0;if(k==='yarn_count')c=tex(a[k])-tex(b[k]);else if(['weight_kg','unit_price'].includes(k))c=(a[k]==null?Infinity:Number(a[k]))-(b[k]==null?Infinity:Number(b[k]));else c=cmp(a[k],b[k]);return ['desc','coarse'].includes(d)?-c:c});return rs}
 function renderInventory(){const rs=invRows();iTotal.textContent=yarns.length;iVisible.textContent=rs.length;iWeight.textContent=rs.reduce((s,y)=>s+(Number(y.weight_kg)||0),0).toFixed(2);iUnknown.textContent=yarns.filter(y=>y.reference_composition==='未知').length;invBody.innerHTML=rs.map(y=>`<tr><td class="code">${esc(y.yarn_code)}</td><td>${esc(y.mill_sample_code)}</td><td>${esc(y.product_name)}</td><td class="ellipsis" title="${esc(y.reference_composition)}">${esc(y.reference_composition)}</td><td class="ellipsis">${esc(y.test_composition)}</td><td>${esc(y.yarn_count)}</td><td>${esc(y.spinning_method)}</td><td>${esc([y.color,y.color_code].filter(Boolean).join(' / '))}</td><td>${esc(y.lot_no)}</td><td>${y.weight_kg??''}</td>${admin()?`<td>${y.unit_price??''}</td><td>${esc(y.supplier_name)}</td>`:''}<td>${esc(y.purpose)}</td><td>${canEdit()?`<button class="btn small detailYarn" data-id="${y.id}">详情/编辑</button>`:'查看'}</td></tr>`).join('');if(!admin())document.querySelectorAll('.admincol').forEach(x=>x.classList.add('hidden'));document.querySelectorAll('.detailYarn').forEach(b=>b.onclick=()=>openYarn(yarns.find(y=>y.id===b.dataset.id)))}
@@ -208,7 +231,7 @@ function renderInventory(){const rs=invRows();iTotal.textContent=yarns.length;iV
 const yarnFields=[['yarn_code','正式纱线编号','text'],['mill_sample_code','纱厂编号','text'],['supplier_code','供应商代码','text'],['supplier_name','真实供应商','text','admin'],['product_name','品名','text'],['reference_composition','参考成分','textarea'],['test_composition','实测成分','textarea'],['yarn_count','纱支','text'],['spinning_method','纺纱方式','text'],['analysis_code','分析编号','text'],['color','颜色','text'],['color_code','色号','text'],['lot_no','批号/缸号','text'],['weight_kg','版毛重量kg','number'],['unit_price','每公斤单价','number','admin'],['purchase_date','采购/入库日期','date'],['purpose','用途','text'],['status','状态','text'],['notes','备注','textarea']];
 function openYarn(y=null){editingYarn=y;yarnModalTitle.textContent=y?'纱线详情 / 编辑':'新增纱线';yarnForm.innerHTML=yarnFields.filter(f=>f[3]!=='admin'||admin()).map(([k,l,t])=>`<div class="field ${t==='textarea'?'full':''}"><label>${l}</label>${t==='textarea'?`<textarea id="yf_${k}">${esc(y?.[k]??'')}</textarea>`:`<input id="yf_${k}" type="${t}" value="${esc(y?.[k]??'')}">`}</div>`).join('');yarnDelete.classList.toggle('hidden',!y||!admin());yarnModal.classList.add('open')}
 function yarnPayload(){const p={};yarnFields.filter(f=>f[3]!=='admin'||admin()).forEach(([k,,t])=>{const v=$(`yf_${k}`).value;p[k]=t==='number'?(v===''?null:Number(v)):(v.trim()||null)});return p}
-async function saveYarn(){const p=yarnPayload();if(!p.yarn_code||!p.product_name){alert('纱线编号和品名必填');return}try{if(editingYarn)await req('/rest/v1/yarns?id=eq.'+encodeURIComponent(editingYarn.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});else await req('/rest/v1/yarns',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});yarnModal.classList.remove('open');await loadAll()}catch(e){alert('保存失败：'+e.message)}}
+async function saveYarn(){const p=yarnPayload();if(p.yarn_count)p.yarn_count=normalizeCount(p.yarn_count);if(!p.yarn_code||!p.product_name){alert('纱线编号和品名必填');return}try{if(editingYarn)await req('/rest/v1/yarns?id=eq.'+encodeURIComponent(editingYarn.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});else await req('/rest/v1/yarns',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(p)});yarnModal.classList.remove('open');await loadAll()}catch(e){alert('保存失败：'+e.message)}}
 async function deleteYarn(){if(!editingYarn||!admin()||!confirm('确定删除？'))return;try{await req('/rest/v1/yarns?id=eq.'+encodeURIComponent(editingYarn.id),{method:'DELETE'});yarnModal.classList.remove('open');await loadAll()}catch(e){alert('删除失败：'+e.message)}}
 
 async function loadScript(src){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error('外部组件加载失败'));document.head.appendChild(s)})}
@@ -219,7 +242,7 @@ function addLabelSheets(wb,list,allKinds=false,only=null){const kinds=allKinds?[
 async function exportLabel(kind){await ensureXLSX();const wb=XLSX.utils.book_new();addLabelSheets(wb,yarns,false,kind);XLSX.writeFile(wb,`YarnVault_${kind}_标签.xlsx`)}
 
 const headerMap={'纱线编号':'yarn_code','正式纱线编号':'yarn_code','纱厂编号':'mill_sample_code','供应商代码':'supplier_code','真实供应商':'supplier_name','供应商':'supplier_name','品名':'product_name','参考成分':'reference_composition','成分':'reference_composition','测试成分':'test_composition','实测成分':'test_composition','纱支':'yarn_count','支数':'yarn_count','纺纱方式':'spinning_method','分析编号':'analysis_code','颜色':'color','色号':'color_code','批号/缸号':'lot_no','批号':'lot_no','重量':'weight_kg','版毛重量kg':'weight_kg','每公斤单价':'unit_price','单价':'unit_price','采购/入库日期':'purchase_date','采购日期':'purchase_date','用途':'purpose','状态':'status','备注':'notes'};
-function canon(raw){const o={};for(const [h,v] of Object.entries(raw)){const k=headerMap[String(h).trim()]||h;if(['weight_kg','unit_price'].includes(k))o[k]=v===''||v==null?null:Number(v);else o[k]=v==null?null:String(v).trim()||null}if(o.purpose==='色卡')o.purpose='针织样衣版毛';return o}
+function canon(raw){const o={};for(const [h,v] of Object.entries(raw)){const k=headerMap[String(h).trim()]||h;if(['weight_kg','unit_price'].includes(k))o[k]=v===''||v==null?null:Number(v);else o[k]=v==null?null:String(v).trim()||null}if(o.yarn_count)o.yarn_count=normalizeCount(o.yarn_count);if(o.purpose==='色卡')o.purpose='针织样衣版毛';return o}
 function buildPlan(items){const p={new:[],same:[],conflict:[],error:[],duplicate:[]},seen=new Map();for(let i=0;i<items.length;i++){const n=items[i],row=i+2,key=n.yarn_code||n.mill_sample_code;if(!key){p.error.push({row,reason:'缺少编号'});continue}if(seen.has(key)){p.duplicate.push({row,first:seen.get(key),key});continue}seen.set(key,row);let old=n.yarn_code?yarns.find(y=>y.yarn_code===n.yarn_code):null;if(!old&&n.mill_sample_code)old=yarns.find(y=>y.mill_sample_code===n.mill_sample_code);if(!old){if(!n.yarn_code||!n.product_name)p.error.push({row,reason:'新增记录缺少正式编号或品名'});else p.new.push({row,data:n});continue}const diffs=[];for(const [k,nv] of Object.entries(n)){if(nv===null||nv==='')continue;if(!admin()&&['supplier_name','unit_price'].includes(k))continue;if(String(old[k]??'').trim()!==String(nv).trim())diffs.push({field:k,old:old[k],new:nv,choice:'old'})}if(diffs.length)p.conflict.push({row,old,newdata:n,diffs});else p.same.push({row,old})}return p}
 function renderPlan(){sNew.textContent=importPlan.new.length;sSame.textContent=importPlan.same.length;sConflict.textContent=importPlan.conflict.length;sError.textContent=importPlan.error.length;sDup.textContent=importPlan.duplicate.length;let h='';if(importPlan.new.length)h+=`<h3>新增</h3><p>${importPlan.new.map(x=>esc(x.data.yarn_code)).join('、')}</p>`;for(const [ci,c] of importPlan.conflict.entries()){h+=`<div class="card"><b>${esc(c.old.yarn_code)} · ${esc(c.old.product_name)}</b><table style="min-width:0"><thead><tr><th>字段</th><th>现有</th><th>新值</th><th>选择</th></tr></thead><tbody>${c.diffs.map((d,di)=>`<tr><td>${esc(d.field)}</td><td>${esc(d.old)}</td><td>${esc(d.new)}</td><td><select class="cchoice" data-ci="${ci}" data-di="${di}"><option value="old">保留旧值</option><option value="new">采用新值</option></select></td></tr>`).join('')}</tbody></table></div>`}if(importPlan.error.length)h+=`<h3 class="warn">异常</h3>${importPlan.error.map(x=>`<div>第${x.row}行：${esc(x.reason)}</div>`).join('')}`;if(importPlan.duplicate.length)h+=`<h3 class="warn">重复</h3>${importPlan.duplicate.map(x=>`<div>第${x.row}行与第${x.first}行重复：${esc(x.key)}</div>`).join('')}`;importDetail.innerHTML=h||'<div class="notice">无变化</div>';document.querySelectorAll('.cchoice').forEach(s=>s.onchange=()=>importPlan.conflict[+s.dataset.ci].diffs[+s.dataset.di].choice=s.value)}
 async function readYarnExcel(file){await ensureXLSX();const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const raw=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:null});importPlan=buildPlan(raw.map(canon));renderPlan();importModal.classList.add('open')}
